@@ -26,9 +26,29 @@
 #include "config.h"
 #endif
 
+#include <gst/gstversion.h>
+
+#if !GST_CHECK_VERSION(1, 13, 1)
+#ifdef STATIC_PLUGIN
+#define GST_PLUGIN_BUILD_STATIC 1
+#endif
+#endif
+
 #include <gst/gst.h>
 #include "gstinterpipesrc.h"
 #include "gstinterpipesink.h"
+
+#ifdef STATIC_PLUGIN
+#ifndef VERSION
+#define VERSION "1.0.3"
+#endif
+#ifndef PACKAGE
+#define PACKAGE "gst-interpipe"
+#endif
+#ifndef PACKAGE_NAME
+#define PACKAGE_NAME "GstInterpipe"
+#endif
+#endif
 
 GST_DEBUG_CATEGORY_EXTERN (gst_inter_pipe_debug);
 
