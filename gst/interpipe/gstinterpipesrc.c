@@ -395,17 +395,20 @@ gst_inter_pipe_src_event (GstBaseSrc * base, GstEvent * event)
 
   basesrc_class = GST_BASE_SRC_CLASS (gst_inter_pipe_src_parent_class);
   src = GST_INTER_PIPE_SRC (base);
-  node = gst_inter_pipe_get_node (src->listen_to);
 
-  if (GST_EVENT_IS_UPSTREAM (event)) {
+  if (src->listen_to) {
+    if (GST_EVENT_IS_UPSTREAM (event)) {
+      GST_INFO_OBJECT (src, "Incoming upstream event %s",
+          GST_EVENT_TYPE_NAME (event));
 
-    GST_INFO_OBJECT (src, "Incoming upstream event %s",
-        GST_EVENT_TYPE_NAME (event));
-
-    if (node) {
-      gst_inter_pipe_inode_receive_event (node, gst_event_ref (event));
-    } else
-      GST_WARNING_OBJECT (src, "Node doesn't exist, event won't be forwarded");
+      node = gst_inter_pipe_get_node (src->listen_to);
+      if (node) {
+        gst_inter_pipe_inode_receive_event (node, gst_event_ref (event));
+      } else
+        GST_WARNING_OBJECT (src, "Node doesn't exist, event won't be forwarded");
+    }
+  } else {
+    GST_DEBUG_OBJECT (src, "Source node not specified, event won't be forwarded");
   }
 
   return basesrc_class->event (base, event);
