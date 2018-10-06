@@ -54,8 +54,11 @@ enum
 {
   PROP_0,
   PROP_FORWARD_EOS,
-  PROP_FORWARD_EVENTS
+  PROP_FORWARD_EVENTS,
+  PROP_ALLOW_NEGOTIATION
 };
+
+#define DEFAULT_ALLOW_NEGOTIATION TRUE
 
 static void gst_inter_pipe_sink_update_node_name (GstInterPipeSink * sink,
     GParamSpec * pspec);
@@ -109,6 +112,9 @@ struct _GstInterPipeSink
 
   /** Enable EOS notify */
   gboolean forward_eos;
+
+  /** Enable Caps negotiation */
+  gboolean allow_negotiation;
 
   /** Last caps */
   GstCaps *caps;
@@ -164,6 +170,11 @@ gst_inter_pipe_sink_class_init (GstInterPipeSinkClass * klass)
       g_param_spec_boolean ("forward-events", "Forward events",
           "Forward downstream events to all the listeners (except for EOS)",
           FALSE, G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class, PROP_ALLOW_NEGOTIATION,
+      g_param_spec_boolean ("allow-negotiation", "Allow caps negotiation",
+          "Allow caps negotiation with interpipesrc",
+          DEFAULT_ALLOW_NEGOTIATION, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   basesink_class->get_caps = GST_DEBUG_FUNCPTR (gst_inter_pipe_sink_get_caps);
   basesink_class->set_caps = GST_DEBUG_FUNCPTR (gst_inter_pipe_sink_set_caps);
@@ -240,6 +251,9 @@ gst_inter_pipe_sink_set_property (GObject * object, guint prop_id,
     case PROP_FORWARD_EVENTS:
       sink->forward_events = g_value_get_boolean (value);
       break;
+    case PROP_ALLOW_NEGOTIATION:
+      sink->allow_negotiation = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -252,7 +266,12 @@ gst_inter_pipe_sink_get_property (GObject * object, guint prop_id,
 {
   g_return_if_fail (GST_IS_INTER_PIPE_SINK (object));
 
+  GstInterPipeSink*sink = GST_INTER_PIPE_SINK (object);
+
   switch (prop_id) {
+    case PROP_ALLOW_NEGOTIATION:
+      g_value_set_boolean (value, sink->allow_negotiation);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -396,6 +415,12 @@ gst_inter_pipe_sink_get_caps (GstBaseSink * base, GstCaps * filter)
 
   sink = GST_INTER_PIPE_SINK (base);
 
+  if (!sink->allow_negotiation) {
+    if (filter)
+      filter = gst_caps_ref (filter);
+    goto nonegotiation;
+  }
+
   g_mutex_lock (&sink->listeners_mutex);
   listeners = GST_INTER_PIPE_SINK_LISTENERS (sink);
 
@@ -433,6 +458,11 @@ gst_inter_pipe_sink_get_caps (GstBaseSink * base, GstCaps * filter)
   }
 
   return gst_caps_ref (sink->caps_negotiated);
+
+nonegotiation:
+  {
+    return filter;
+  }
 
 nolisteners:
   {
@@ -478,6 +508,9 @@ gst_inter_pipe_sink_set_caps (GstBaseSink * base, GstCaps * caps)
 
   gst_caps_replace (&sink->caps, caps);
   gst_app_sink_set_caps (GST_APP_SINK (sink), caps);
+
+  if (!sink->allow_negotiation)
+    return TRUE;
 
   /* No one is listening to me I can accept caps */
   if (0 == g_hash_table_size (listeners))
